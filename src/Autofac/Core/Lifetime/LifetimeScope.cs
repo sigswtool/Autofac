@@ -29,6 +29,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using Autofac.Builder;
 using Autofac.Core.Registration;
 using Autofac.Core.Resolving;
 using Autofac.Util;
@@ -161,9 +162,10 @@ namespace Autofac.Core.Lifetime
         /// will be disposed along with it.
         /// </summary>
         /// <param name="configurationAction">Action on a <see cref="ContainerBuilder"/>
-        /// that adds component registations visible only in the new scope.</param>
+        /// that adds component registrations visible only in the new scope.</param>
         /// <returns>A new lifetime scope.</returns>
         /// <example>
+        /// <code>
         /// IContainer cr = // ...
         /// using (var lifetime = cr.BeginLifetimeScope(builder =&gt; {
         ///         builder.RegisterType&lt;Foo&gt;();
@@ -171,6 +173,7 @@ namespace Autofac.Core.Lifetime
         /// {
         ///     var foo = lifetime.Resolve&lt;Foo&gt;();
         /// }
+        /// </code>
         /// </example>
         public ILifetimeScope BeginLifetimeScope(Action<ContainerBuilder> configurationAction)
         {
@@ -184,9 +187,10 @@ namespace Autofac.Core.Lifetime
         /// </summary>
         /// <param name="tag">The tag applied to the <see cref="ILifetimeScope"/>.</param>
         /// <param name="configurationAction">Action on a <see cref="ContainerBuilder"/>
-        /// that adds component registations visible only in the new scope.</param>
+        /// that adds component registrations visible only in the new scope.</param>
         /// <returns>A new lifetime scope.</returns>
         /// <example>
+        /// <code>
         /// IContainer cr = // ...
         /// using (var lifetime = cr.BeginLifetimeScope("unitOfWork", builder =&gt; {
         ///         builder.RegisterType&lt;Foo&gt;();
@@ -194,6 +198,7 @@ namespace Autofac.Core.Lifetime
         /// {
         ///     var foo = lifetime.Resolve&lt;Foo&gt;();
         /// }
+        /// </code>
         /// </example>
         public ILifetimeScope BeginLifetimeScope(object tag, Action<ContainerBuilder> configurationAction)
         {
@@ -204,6 +209,12 @@ namespace Autofac.Core.Lifetime
             var locals = CreateScopeRestrictedRegistry(tag, configurationAction);
             var scope = new LifetimeScope(locals, this, tag);
             scope.Disposer.AddInstanceForDisposal(locals);
+
+            if (locals.Properties.TryGetValue(MetadataKeys.ContainerBuildOptions, out var options) &&
+                !((ContainerBuildOptions)options).HasFlag(ContainerBuildOptions.IgnoreStartableComponents))
+            {
+                StartableManager.StartStartableComponents(scope);
+            }
 
             RaiseBeginning(scope);
 
@@ -216,7 +227,7 @@ namespace Autofac.Core.Lifetime
         /// <param name="tag">The tag applied to the <see cref="ILifetimeScope"/>.</param>
         /// <param name="configurationAction">Action on a <see cref="ContainerBuilder"/>
         /// that adds component registrations visible only in the child scope.</param>
-        /// <returns>Registry to use for a child scope</returns>
+        /// <returns>Registry to use for a child scope.</returns>
         /// <remarks>It is the responsibility of the caller to make sure that the registry is properly
         /// disposed of. This is generally done by adding the registry to the <see cref="Disposer"/>
         /// property of the child scope.</remarks>
@@ -326,7 +337,7 @@ namespace Autofac.Core.Lifetime
         public IComponentRegistry ComponentRegistry { get; }
 
         /// <summary>
-        /// Releases unmanaged and - optionally - managed resources
+        /// Releases unmanaged and - optionally - managed resources.
         /// </summary>
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
         protected override void Dispose(bool disposing)

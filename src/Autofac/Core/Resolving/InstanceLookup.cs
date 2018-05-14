@@ -27,7 +27,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
 using System.Text;
+using Autofac.Builder;
 
 namespace Autofac.Core.Resolving
 {
@@ -82,7 +84,24 @@ namespace Autofac.Core.Resolving
             var handler = InstanceLookupEnding;
             handler?.Invoke(this, new InstanceLookupEndingEventArgs(this, NewInstanceActivated));
 
+            StartStartableComponent(instance);
+
             return instance;
+        }
+
+        private void StartStartableComponent(object instance)
+        {
+            if (instance is IStartable startable
+                && ComponentRegistration.Services.Any(s => (s is TypedService typed) && typed.ServiceType == typeof(IStartable))
+                && !ComponentRegistration.Metadata.ContainsKey(MetadataKeys.AutoActivated)
+                && ComponentRegistry.Properties.ContainsKey(MetadataKeys.StartOnActivatePropertyKey))
+            {
+                // Issue #916: Set the startable as "done starting" BEFORE calling Start
+                // so you don't get a StackOverflow if the component creates a child scope
+                // during Start. You don't want the startable trying to activate itself.
+                ComponentRegistration.Metadata[MetadataKeys.AutoActivated] = true;
+                startable.Start();
+            }
         }
 
         private bool NewInstanceActivated => _newInstance != null;

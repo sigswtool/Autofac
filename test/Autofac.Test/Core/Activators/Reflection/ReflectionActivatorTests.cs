@@ -124,7 +124,7 @@ namespace Autofac.Test.Core.Activators.Reflection
                 () => target.ActivateInstance(Factory.EmptyContext, Factory.NoParameters));
 
             // I.e. the type of the missing dependency.
-            Assert.True(ex.Message.Contains("DependsByProp"));
+            Assert.Contains("DependsByProp", ex.Message);
         }
 
         [Fact]
@@ -359,13 +359,35 @@ namespace Autofac.Test.Core.Activators.Reflection
         }
 
         [Fact]
-        public void NonPublicConstructorsIgnored()
+        public void ThrowsWhenNoPublicConstructors()
         {
             var target = Factory.CreateReflectionActivator(typeof(NoPublicConstructor));
+            var dx = Assert.Throws<NoConstructorsFoundException>(
+                () => target.ActivateInstance(new Container(), Factory.NoParameters));
+
+            Assert.Contains(typeof(NoPublicConstructor).FullName, dx.Message);
+            Assert.Equal(typeof(NoPublicConstructor), dx.OffendingType);
+        }
+
+        public class InternalDefaultConstructor
+        {
+            public InternalDefaultConstructor(int x)
+            {
+            }
+
+            internal InternalDefaultConstructor()
+            {
+            }
+        }
+
+        [Fact]
+        public void NonPublicConstructorsIgnored()
+        {
+            var target = Factory.CreateReflectionActivator(typeof(InternalDefaultConstructor));
             var dx = Assert.Throws<DependencyResolutionException>(() =>
                 target.ActivateInstance(new Container(), Factory.NoParameters));
 
-            Assert.True(dx.Message.Contains(typeof(DefaultConstructorFinder).Name));
+            Assert.Contains(typeof(DefaultConstructorFinder).Name, dx.Message);
         }
 
         public class WithGenericCtor<T>

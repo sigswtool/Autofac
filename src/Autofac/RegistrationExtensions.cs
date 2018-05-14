@@ -240,7 +240,7 @@ namespace Autofac
         }
 
         /// <summary>
-        /// Register the types in an assembly.
+        /// Register all types in an assembly.
         /// </summary>
         /// <param name="builder">Container builder.</param>
         /// <param name="assemblies">The assemblies from which to register types.</param>
@@ -919,11 +919,11 @@ namespace Autofac
         }
 
         /// <summary>
-        /// Sets the target of the registration (used for metadata generation.)
+        /// Sets the target of the registration (used for metadata generation).
         /// </summary>
         /// <typeparam name="TLimit">The type of the limit.</typeparam>
         /// <typeparam name="TActivatorData">The type of the activator data.</typeparam>
-        /// <typeparam name="TSingleRegistrationStyle">Registration style</typeparam>
+        /// <typeparam name="TSingleRegistrationStyle">Registration style.</typeparam>
         /// <param name="registration">Registration to set target for.</param>
         /// <param name="target">The target.</param>
         /// <returns>

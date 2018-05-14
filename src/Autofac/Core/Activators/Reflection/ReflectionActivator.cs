@@ -42,7 +42,8 @@ namespace Autofac.Core.Activators.Reflection
         private readonly Type _implementationType;
         private readonly Parameter[] _configuredProperties;
         private readonly Parameter[] _defaultParameters;
-        private readonly ConstructorInfo[] _availableConstructors;
+        private ConstructorInfo[] _availableConstructors;
+        private readonly object _availableConstructorsLock = new object();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ReflectionActivator"/> class.
@@ -69,10 +70,7 @@ namespace Autofac.Core.Activators.Reflection
             ConstructorFinder = constructorFinder;
             ConstructorSelector = constructorSelector;
             _configuredProperties = configuredProperties.ToArray();
-
             _defaultParameters = configuredParameters.Concat(new Parameter[] { new AutowiringParameter(), new DefaultValueParameter() }).ToArray();
-
-            _availableConstructors = ConstructorFinder.FindConstructors(_implementationType);
         }
 
         /// <summary>
@@ -93,19 +91,33 @@ namespace Autofac.Core.Activators.Reflection
         /// <returns>The activated instance.</returns>
         /// <remarks>
         /// The context parameter here should probably be ILifetimeScope in order to reveal Disposer,
-        /// but will wait until implementing a concrete use case to make the decision
+        /// but will wait until implementing a concrete use case to make the decision.
         /// </remarks>
         public object ActivateInstance(IComponentContext context, IEnumerable<Parameter> parameters)
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             if (parameters == null) throw new ArgumentNullException(nameof(parameters));
 
+            // Lazy instantiate available constructor list so the constructor
+            // finder can be changed during AsSelf() registration. AsSelf() creates
+            // a temporary activator just long enough to get the LimitType.
+            if (_availableConstructors == null)
+            {
+                lock (_availableConstructorsLock)
+                {
+                    if (_availableConstructors == null)
+                    {
+                        _availableConstructors = ConstructorFinder.FindConstructors(_implementationType);
+                    }
+                }
+            }
+
             if (_availableConstructors.Length == 0)
                 throw new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, ReflectionActivatorResources.NoConstructorsAvailable, _implementationType, ConstructorFinder));
 
             var validBindings = GetValidConstructorBindings(context, parameters);
 
-            var selectedBinding = ConstructorSelector.SelectConstructorBinding(validBindings);
+            var selectedBinding = ConstructorSelector.SelectConstructorBinding(validBindings, parameters);
 
             var instance = selectedBinding.Instantiate();
 
