@@ -82,6 +82,10 @@ namespace Autofac.Core.Resolving
             {
                 result = ResolveComponent(registration, parameters);
             }
+            catch (ObjectDisposedException)
+            {
+                throw;
+            }
             catch (DependencyResolutionException dependencyResolutionException)
             {
                 End(dependencyResolutionException);
@@ -121,17 +125,26 @@ namespace Autofac.Core.Resolving
             var handler = InstanceLookupBeginning;
             handler?.Invoke(this, new InstanceLookupBeginningEventArgs(activation));
 
-            var instance = activation.Execute();
-            _successfulActivations.Add(activation);
+            try
+            {
+                var instance = activation.Execute();
+                _successfulActivations.Add(activation);
 
-            _activationStack.Pop();
+                return instance;
+            }
+            finally
+            {
+                // Issue #929: Allow the activation stack to be popped even if the activation failed.
+                // This allows try/catch to happen in lambda registrations without corrupting the stack.
+                _activationStack.Pop();
 
-            if (_activationStack.Count == 0)
-                CompleteActivations();
+                if (_activationStack.Count == 0)
+                {
+                    CompleteActivations();
+                }
 
-            --_callDepth;
-
-            return instance;
+                --_callDepth;
+            }
         }
 
         public event EventHandler<ResolveOperationEndingEventArgs> CurrentOperationEnding;

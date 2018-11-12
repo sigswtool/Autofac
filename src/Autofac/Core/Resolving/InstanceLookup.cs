@@ -30,6 +30,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Autofac.Builder;
+using Autofac.Features.Decorators;
 
 namespace Autofac.Core.Resolving
 {
@@ -77,14 +78,15 @@ namespace Autofac.Core.Resolving
 
             _executed = true;
 
+            object decoratorTarget = null;
             object instance = ComponentRegistration.Sharing == InstanceSharing.None
-                ? Activate(Parameters)
-                : _activationScope.GetOrCreateAndShare(ComponentRegistration.Id, () => Activate(Parameters));
+                ? Activate(Parameters, out decoratorTarget)
+                : _activationScope.GetOrCreateAndShare(ComponentRegistration.Id, () => Activate(Parameters, out decoratorTarget));
 
             var handler = InstanceLookupEnding;
             handler?.Invoke(this, new InstanceLookupEndingEventArgs(this, NewInstanceActivated));
 
-            StartStartableComponent(instance);
+            StartStartableComponent(decoratorTarget);
 
             return instance;
         }
@@ -106,13 +108,25 @@ namespace Autofac.Core.Resolving
 
         private bool NewInstanceActivated => _newInstance != null;
 
-        private object Activate(IEnumerable<Parameter> parameters)
+        private object Activate(IEnumerable<Parameter> parameters, out object decoratorTarget)
         {
             ComponentRegistration.RaisePreparing(this, ref parameters);
 
+            var resolveParameters = parameters as Parameter[] ?? parameters.ToArray();
+
             try
             {
-                _newInstance = ComponentRegistration.Activator.ActivateInstance(this, parameters);
+                decoratorTarget = _newInstance = ComponentRegistration.Activator.ActivateInstance(this, resolveParameters);
+
+                _newInstance = InstanceDecorator.TryDecorateRegistration(
+                    ComponentRegistration,
+                    _newInstance,
+                    _activationScope,
+                    resolveParameters);
+            }
+            catch (ObjectDisposedException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -125,12 +139,11 @@ namespace Autofac.Core.Resolving
                 // important. The ProvidedInstanceActivator will NOT dispose of the provided
                 // instance once the instance has been activated - assuming that it will be
                 // done during the lifetime scope's Disposer executing.
-                var instanceAsDisposable = _newInstance as IDisposable;
-                if (instanceAsDisposable != null)
+                if (decoratorTarget is IDisposable instanceAsDisposable)
                     _activationScope.Disposer.AddInstanceForDisposal(instanceAsDisposable);
             }
 
-            ComponentRegistration.RaiseActivating(this, parameters, ref _newInstance);
+            ComponentRegistration.RaiseActivating(this, resolveParameters, ref _newInstance);
 
             return _newInstance;
         }

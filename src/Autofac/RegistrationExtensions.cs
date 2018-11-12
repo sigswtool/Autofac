@@ -35,6 +35,7 @@ using Autofac.Core;
 using Autofac.Core.Activators.ProvidedInstance;
 using Autofac.Core.Activators.Reflection;
 using Autofac.Core.Lifetime;
+using Autofac.Features.Decorators;
 using Autofac.Features.LightweightAdapters;
 using Autofac.Features.OpenGenerics;
 using Autofac.Features.Scanning;
@@ -82,7 +83,7 @@ namespace Autofac
         /// <param name="instance">The instance to register.</param>
         /// <returns>Registration builder allowing the registration to be configured.</returns>
         /// <remarks>If no services are explicitly specified for the instance, the
-        /// static type <typeparamref name="T"/> will be used as the default service (i.e. *not* <code>instance.GetType()</code>).</remarks>
+        /// static type <typeparamref name="T"/> will be used as the default service (i.e. *not* <c>instance.GetType()</c>).</remarks>
         public static IRegistrationBuilder<T, SimpleActivatorData, SingleRegistrationStyle>
             RegisterInstance<T>(this ContainerBuilder builder, T instance)
             where T : class
@@ -1315,6 +1316,108 @@ namespace Autofac
         }
 
         /// <summary>
+        /// Decorate all components implementing service <typeparamref name="TService"/>
+        /// with decorator service <typeparamref name="TDecorator"/>.
+        /// </summary>
+        /// <typeparam name="TDecorator">Service type of the decorator. Must accept a parameter
+        /// of type <typeparamref name="TService"/>, which will be set to the instance being decorated.</typeparam>
+        /// <typeparam name="TService">Service type being decorated.</typeparam>
+        /// <param name="builder">Container builder.</param>
+        /// <param name="condition">A function that when provided with an <see cref="IDecoratorContext"/>
+        /// instance determines if the decorator should be applied.</param>
+        public static void RegisterDecorator<TDecorator, TService>(this ContainerBuilder builder, Func<IDecoratorContext, bool> condition = null)
+            where TDecorator : TService
+        {
+            if (builder == null) throw new ArgumentNullException(nameof(builder));
+
+            builder.RegisterType<TDecorator>().As(new DecoratorService(typeof(TService), condition));
+        }
+
+        /// <summary>
+        /// Decorate all components implementing service <paramref name="serviceType"/>
+        /// with decorator service <paramref name="decoratorType"/>.
+        /// </summary>
+        /// <param name="builder">Container builder.</param>
+        /// <param name="decoratorType">Service type of the decorator. Must accept a parameter
+        /// of type <paramref name="serviceType"/>, which will be set to the instance being decorated.</param>
+        /// <param name="serviceType">Service type being decorated.</param>
+        /// <param name="condition">A function that when provided with an <see cref="IDecoratorContext"/>
+        /// instance determines if the decorator should be applied.</param>
+        public static void RegisterDecorator(
+            this ContainerBuilder builder,
+            Type decoratorType,
+            Type serviceType,
+            Func<IDecoratorContext, bool> condition = null)
+        {
+            if (builder == null) throw new ArgumentNullException(nameof(builder));
+            if (decoratorType == null) throw new ArgumentNullException(nameof(decoratorType));
+            if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
+
+            builder.RegisterType(decoratorType).As(new DecoratorService(serviceType, condition));
+        }
+
+        /// <summary>
+        /// Decorate all components implementing service <typeparamref name="TService"/>
+        /// using the provided <paramref name="decorator"/> function.
+        /// </summary>
+        /// <typeparam name="TService">Service type being decorated.</typeparam>
+        /// <param name="builder">Container builder.</param>
+        /// <param name="decorator">Function decorating a component instance that provides
+        /// <typeparamref name="TService"/>, given the context, parameters and service to decorate.</param>
+        /// <param name="condition">A function that when provided with an <see cref="IDecoratorContext"/>
+        /// instance determines if the decorator should be applied.</param>
+        public static void RegisterDecorator<TService>(
+            this ContainerBuilder builder,
+            Func<IComponentContext, IEnumerable<Parameter>, TService, TService> decorator,
+            Func<IDecoratorContext, bool> condition = null)
+        {
+            if (builder == null) throw new ArgumentNullException(nameof(builder));
+            if (decorator == null) throw new ArgumentNullException(nameof(decorator));
+
+            var service = new DecoratorService(typeof(TService), condition);
+
+            builder.Register((c, p) =>
+            {
+                var instance = (TService)p
+                    .OfType<TypedParameter>()
+                    .FirstOrDefault(tp => tp.Type == typeof(TService))
+                    ?.Value;
+
+                if (instance == null)
+                {
+                    throw new DependencyResolutionException(String.Format(CultureInfo.CurrentCulture, RegistrationExtensionsResources.DecoratorRequiresInstanceParameter, typeof(TService).Name));
+                }
+
+                return decorator(c, p, instance);
+            })
+            .As(service);
+        }
+
+        /// <summary>
+        /// Decorate all components implementing open generic service <paramref name="serviceType"/>.
+        /// </summary>
+        /// <param name="builder">Container builder.</param>
+        /// <param name="decoratorType">The type of the decorator. Must be an open generic type, and accept a parameter
+        /// of type <paramref name="serviceType"/>, which will be set to the instance being decorated.</param>
+        /// <param name="serviceType">Service type being decorated. Must be an open generic type.</param>
+        /// <param name="condition">A function that when provided with an <see cref="IDecoratorContext"/>
+        /// instance determines if the decorator should be applied.</param>
+        public static void RegisterGenericDecorator(
+            this ContainerBuilder builder,
+            Type decoratorType,
+            Type serviceType,
+            Func<IDecoratorContext, bool> condition = null)
+        {
+            if (builder == null) throw new ArgumentNullException(nameof(builder));
+            if (decoratorType == null) throw new ArgumentNullException(nameof(decoratorType));
+            if (serviceType == null) throw new ArgumentNullException(nameof(serviceType));
+
+            OpenGenericRegistrationExtensions
+                .RegisterGeneric(builder, decoratorType)
+                .As(new DecoratorService(serviceType, condition));
+        }
+
+        /// <summary>
         /// Run a supplied action instead of disposing instances when they're no
         /// longer required.
         /// </summary>
@@ -1471,7 +1574,7 @@ namespace Autofac
         /// <param name="registration">The registration to configure.</param>
         /// <param name="serviceType">
         /// The service type to check for to determine if the registration should be made.
-        /// Note this is the *service type* - the <code>As&lt;T&gt;</code> part.
+        /// Note this is the *service type* - the <c>As&lt;T&gt;</c> part.
         /// </param>
         /// <returns>A registration builder allowing further configuration of the component.</returns>
         /// <exception cref="System.ArgumentNullException">

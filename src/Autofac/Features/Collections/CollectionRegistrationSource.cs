@@ -33,6 +33,7 @@ using Autofac.Core;
 using Autofac.Core.Activators.Delegate;
 using Autofac.Core.Lifetime;
 using Autofac.Core.Registration;
+using Autofac.Features.Decorators;
 using Autofac.Util;
 
 namespace Autofac.Features.Collections
@@ -61,7 +62,7 @@ namespace Autofac.Features.Collections
     /// This implicit support means other areas (like MVC support or manual
     /// property injection) must take care to only request enumerable values they
     /// expect to get something back for. In other words, "Don't ask the container
-    /// for something you don't expect to resolve."
+    /// for something you don't expect to resolve".
     /// </para>
     /// </remarks>
     internal class CollectionRegistrationSource : IRegistrationSource
@@ -78,7 +79,7 @@ namespace Autofac.Features.Collections
             if (service == null) throw new ArgumentNullException(nameof(service));
             if (registrationAccessor == null) throw new ArgumentNullException(nameof(registrationAccessor));
 
-            if (!(service is IServiceWithType swt))
+            if (!(service is IServiceWithType swt) || service is DecoratorService)
                 return Enumerable.Empty<IComponentRegistration>();
 
             var serviceType = swt.ServiceType;

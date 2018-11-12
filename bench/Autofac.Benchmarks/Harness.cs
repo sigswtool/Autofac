@@ -1,5 +1,5 @@
 // This software is part of the Autofac IoC container
-// Copyright ? 2011 Autofac Contributors
+// Copyright (c) 2011 Autofac Contributors
 // http://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
@@ -40,6 +40,54 @@ namespace Autofac.Benchmarks
         public void DeepGraphResolve()
         {
             BenchmarkRunner.Run<DeepGraphResolveBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyed_Generic()
+        {
+            BenchmarkRunner.Run<Decorators.KeyedGenericBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyed_Nested()
+        {
+            BenchmarkRunner.Run<Decorators.KeyedNestedBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyed_Simple()
+        {
+            BenchmarkRunner.Run<Decorators.KeyedSimpleBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyless_Generic()
+        {
+            BenchmarkRunner.Run<Decorators.KeylessGenericBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyless_Nested()
+        {
+            BenchmarkRunner.Run<Decorators.KeylessNestedBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyless_Nested_Lambda()
+        {
+            BenchmarkRunner.Run<Decorators.KeylessNestedLambdaBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyless_Simple()
+        {
+            BenchmarkRunner.Run<Decorators.KeylessSimpleBenchmark>();
+        }
+
+        [Fact]
+        public void Decorator_Keyless_Simple_Lambda()
+        {
+            BenchmarkRunner.Run<Decorators.KeylessSimpleLambdaBenchmark>();
         }
 
         [Fact]

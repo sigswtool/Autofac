@@ -25,6 +25,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 
@@ -35,7 +36,8 @@ namespace Autofac.Core.Resolving
         /// <summary>
         /// Catch circular dependencies that are triggered by post-resolve processing (e.g. 'OnActivated').
         /// </summary>
-        private const int MaxResolveDepth = 50;
+        [SuppressMessage("SA1306", "SA1306", Justification = "Changed const to static on temporary basis until we can solve circular dependencies without a limit.")]
+        private static int MaxResolveDepth = 50;
 
         private static string CreateDependencyGraphTo(IComponentRegistration registration, Stack<InstanceLookup> activationStack)
         {
@@ -61,8 +63,13 @@ namespace Autofac.Core.Resolving
                 throw new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, CircularDependencyDetectorResources.MaxDepthExceeded, registration));
 
             // Checks for circular dependency
-            if (activationStack.Any(a => a.ComponentRegistration == registration))
-                throw new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, CircularDependencyDetectorResources.CircularDependency, CreateDependencyGraphTo(registration, activationStack)));
+            foreach (var a in activationStack)
+            {
+                if (a.ComponentRegistration == registration)
+                {
+                    throw new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, CircularDependencyDetectorResources.CircularDependency, CreateDependencyGraphTo(registration, activationStack)));
+                }
+            }
         }
     }
 }

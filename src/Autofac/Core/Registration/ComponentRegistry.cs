@@ -24,10 +24,13 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using Autofac.Builder;
+using Autofac.Features.Decorators;
 using Autofac.Util;
 
 namespace Autofac.Core.Registration
@@ -52,17 +55,20 @@ namespace Autofac.Core.Registration
         /// <summary>
         /// External registration sources.
         /// </summary>
-        private readonly IList<IRegistrationSource> _dynamicRegistrationSources = new List<IRegistrationSource>();
+        private readonly List<IRegistrationSource> _dynamicRegistrationSources = new List<IRegistrationSource>();
 
         /// <summary>
         /// All registrations.
         /// </summary>
-        private readonly ICollection<IComponentRegistration> _registrations = new List<IComponentRegistration>();
+        private readonly List<IComponentRegistration> _registrations = new List<IComponentRegistration>();
 
         /// <summary>
         /// Keeps track of the status of registered services.
         /// </summary>
-        private readonly IDictionary<Service, ServiceRegistrationInfo> _serviceInfo = new Dictionary<Service, ServiceRegistrationInfo>();
+        private readonly Dictionary<Service, ServiceRegistrationInfo> _serviceInfo = new Dictionary<Service, ServiceRegistrationInfo>();
+
+        private readonly ConcurrentDictionary<IComponentRegistration, IEnumerable<IComponentRegistration>> _decorators
+            = new ConcurrentDictionary<IComponentRegistration, IEnumerable<IComponentRegistration>>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ComponentRegistry"/> class.
@@ -162,12 +168,16 @@ namespace Autofac.Core.Registration
 
         private void UpdateInitialisedAdapters(IComponentRegistration registration)
         {
-            var adapterServices = _serviceInfo
-                .Where(si => si.Value.ShouldRecalculateAdaptersOn(registration))
-                .Select(si => si.Key)
-                .ToArray();
+            var adapterServices = new List<Service>();
+            foreach (var serviceInfo in _serviceInfo)
+            {
+                if (serviceInfo.Value.ShouldRecalculateAdaptersOn(registration))
+                {
+                    adapterServices.Add(serviceInfo.Key);
+                }
+            }
 
-            if (adapterServices.Length == 0)
+            if (adapterServices.Count == 0)
                 return;
 
             Debug.WriteLine(
@@ -197,8 +207,7 @@ namespace Autofac.Core.Registration
 
             _registrations.Add(registration);
 
-            var handler = Registered;
-            handler?.Invoke(this, new ComponentRegisteredEventArgs(this, registration));
+            GetRegistered()?.Invoke(this, new ComponentRegisteredEventArgs(this, registration));
         }
 
         /// <summary>
@@ -231,11 +240,49 @@ namespace Autofac.Core.Registration
             }
         }
 
+        /// <inheritdoc />
+        public IEnumerable<IComponentRegistration> DecoratorsFor(IComponentRegistration registration)
+        {
+            if (registration == null) throw new ArgumentNullException(nameof(registration));
+
+            return _decorators.GetOrAdd(registration, r =>
+            {
+                foreach (var service in r.Services)
+                {
+                    if (service is DecoratorService || !(service is IServiceWithType swt)) continue;
+
+                    var decoratorService = new DecoratorService(swt.ServiceType);
+                    return RegistrationsFor(decoratorService)
+                        .OrderBy(d => d.GetRegistrationOrder())
+                        .ToArray();
+                }
+
+                return Enumerable.Empty<IComponentRegistration>();
+            });
+        }
+
         /// <summary>
         /// Fired whenever a component is registered - either explicitly or via a
         /// <see cref="IRegistrationSource"/>.
         /// </summary>
-        public event EventHandler<ComponentRegisteredEventArgs> Registered;
+        public event EventHandler<ComponentRegisteredEventArgs> Registered
+        {
+            add
+            {
+                lock (_synchRoot)
+                {
+                    Properties[MetadataKeys.RegisteredPropertyKey] = GetRegistered() + value;
+                }
+            }
+
+            remove
+            {
+                lock (_synchRoot)
+                {
+                    Properties[MetadataKeys.RegisteredPropertyKey] = GetRegistered() - value;
+                }
+            }
+        }
 
         /// <summary>
         /// Add a registration source that will provide registrations on-the-fly.
@@ -328,6 +375,14 @@ namespace Autofac.Core.Registration
             var info = new ServiceRegistrationInfo(service);
             _serviceInfo.Add(service, info);
             return info;
+        }
+
+        private EventHandler<ComponentRegisteredEventArgs> GetRegistered()
+        {
+            if (Properties.TryGetValue(MetadataKeys.RegisteredPropertyKey, out var registered))
+                return (EventHandler<ComponentRegisteredEventArgs>)registered;
+
+            return null;
         }
     }
 }
