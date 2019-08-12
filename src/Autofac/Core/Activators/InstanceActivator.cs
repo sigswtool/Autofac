@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -24,6 +24,7 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 
 using System;
+using System.Runtime.CompilerServices;
 using Autofac.Util;
 
 namespace Autofac.Core.Activators
@@ -58,6 +59,7 @@ namespace Autofac.Core.Activators
             return LimitType.Name + " (" + GetType().Name + ")";
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         protected void CheckNotDisposed()
         {
             if (IsDisposed)

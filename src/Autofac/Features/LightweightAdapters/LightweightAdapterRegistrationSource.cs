@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -62,7 +62,8 @@ namespace Autofac.Features.LightweightAdapters
                     .Select(r =>
                     {
                         var rb = RegistrationBuilder
-                            .ForDelegate((c, p) => _activatorData.Adapter(c, Enumerable.Empty<Parameter>(), c.ResolveComponent(r, p)))
+                            .ForDelegate((c, p) => _activatorData.Adapter(
+                                c, Enumerable.Empty<Parameter>(), c.ResolveComponent(new ResolveRequest(_activatorData.FromService, r, p))))
                             .Targeting(r)
                             .InheritRegistrationOrderFrom(r);
 
@@ -90,7 +91,8 @@ namespace Autofac.Features.LightweightAdapters
                     .Select(r =>
                     {
                         var rb = RegistrationBuilder
-                            .ForDelegate((c, p) => _activatorData.Adapter(c, p, c.ResolveComponent(r, Enumerable.Empty<Parameter>())))
+                            .ForDelegate((c, p) => _activatorData.Adapter(
+                                c, p, c.ResolveComponent(new ResolveRequest(serviceToFind, r, Enumerable.Empty<Parameter>()))))
                             .Targeting(r);
 
                         rb.RegistrationData.CopyFrom(_registrationData, true);

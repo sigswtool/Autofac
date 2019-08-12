@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -56,7 +56,7 @@ namespace Autofac.Features.GeneratedFactories
             return registrationAccessor(resultTypeService)
                 .Select(r =>
                 {
-                    var factory = new FactoryGenerator(ts.ServiceType, r, ParameterMapping.Adaptive);
+                    var factory = new FactoryGenerator(ts.ServiceType, resultTypeService, r, ParameterMapping.Adaptive);
                     var rb = RegistrationBuilder.ForDelegate(ts.ServiceType, factory.GenerateFactory)
                         .InstancePerLifetimeScope()
                         .ExternallyOwned()

@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -68,15 +68,11 @@ namespace Autofac.Core.Registration
 
             // Issue #272: Taking from the registry the following registrations:
             //   - non-adapting own registrations: wrap them with ExternalComponentRegistration
-            //   - if the registration is from the parent registry of this registry,
-            //     it is already wrapped with ExternalComponentRegistration,
-            //     share it as is
             return _registry.RegistrationsFor(service)
                 .Where(r => r is ExternalComponentRegistration || !r.IsAdapting())
                 .Select(r =>
-                    r as ExternalComponentRegistration ??
 
-                    // equivalent to following registation builder
+                    // equivalent to following registration builder
                     //    RegistrationBuilder.ForDelegate(r.Activator.LimitType, (c, p) => c.ResolveComponent(r, p))
                     //        .Targeting(r)
                     //        .As(service)
@@ -84,7 +80,7 @@ namespace Autofac.Core.Registration
                     //        .CreateRegistration()
                     new ExternalComponentRegistration(
                         Guid.NewGuid(),
-                        new DelegateActivator(r.Activator.LimitType, (c, p) => c.ResolveComponent(r, p)),
+                        new DelegateActivator(r.Activator.LimitType, (c, p) => c.ResolveComponent(new ResolveRequest(service, r, p))),
                         new CurrentScopeLifetime(),
                         InstanceSharing.None,
                         InstanceOwnership.ExternallyOwned,

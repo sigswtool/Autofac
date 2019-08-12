@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -155,19 +155,10 @@ namespace Autofac.Core
         /// </summary>
         public IComponentRegistry ComponentRegistry { get; }
 
-        /// <summary>
-        /// Resolve an instance of the provided registration within the context.
-        /// </summary>
-        /// <param name="registration">The registration.</param>
-        /// <param name="parameters">Parameters for the instance.</param>
-        /// <returns>
-        /// The component instance.
-        /// </returns>
-        /// <exception cref="ComponentNotRegisteredException"/>
-        /// <exception cref="DependencyResolutionException"/>
-        public object ResolveComponent(IComponentRegistration registration, IEnumerable<Parameter> parameters)
+        /// <inheritdoc />
+        public object ResolveComponent(ResolveRequest request)
         {
-            return _rootLifetimeScope.ResolveComponent(registration, parameters);
+            return _rootLifetimeScope.ResolveComponent(request);
         }
 
         /// <summary>

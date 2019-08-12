@@ -1,6 +1,6 @@
 // This software is part of the Autofac IoC container
-// Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// Copyright Â© 2011 Autofac Contributors
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -24,7 +24,9 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 
 using System;
-using System.Globalization;
+#if !NETSTANDARD1_1
+using System.Runtime.Serialization;
+#endif
 
 namespace Autofac.Core
 {
@@ -39,8 +41,15 @@ namespace Autofac.Core
 #endif
     public class DependencyResolutionException : Exception
     {
+#if !NETSTANDARD1_1
+        protected DependencyResolutionException(SerializationInfo info, StreamingContext context)
+            : base(info, context)
+        {
+        }
+#endif
+
         /// <summary>
-        /// Initializes a new instance of the <see cref="DependencyResolutionException"/> class.
+        /// Initializes a new instance of the <see cref="DependencyResolutionException" /> class.
         /// </summary>
         /// <param name="message">The message.</param>
         public DependencyResolutionException(string message)
@@ -56,28 +65,6 @@ namespace Autofac.Core
         public DependencyResolutionException(string message, Exception innerException)
             : base(message, innerException)
         {
-        }
-
-        /// <summary>
-        /// Gets a message that describes the current exception.
-        /// </summary>
-        /// <value>
-        /// The error message that explains the reason for the exception, or an empty string("").
-        /// </value>
-        public override string Message
-        {
-            get
-            {
-                // Issue 343: Including the inner exception message with the
-                // main message for easier debugging.
-                var message = base.Message;
-                if (InnerException == null)
-                    return message;
-
-                var inner = InnerException.Message;
-                message = string.Format(CultureInfo.CurrentCulture, DependencyResolutionExceptionResources.MessageNestingFormat, message, inner);
-                return message;
-            }
         }
     }
 }

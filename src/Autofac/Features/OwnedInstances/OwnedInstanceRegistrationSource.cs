@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -66,7 +66,8 @@ namespace Autofac.Features.OwnedInstances
                             var lifetime = c.Resolve<ILifetimeScope>().BeginLifetimeScope(ownedInstanceService);
                             try
                             {
-                                var value = lifetime.ResolveComponent(r, p);
+                                var context = new ResolveRequest(ownedInstanceService, r, p);
+                                var value = lifetime.ResolveComponent(context);
                                 return Activator.CreateInstance(ts.ServiceType, new[] { value, lifetime });
                             }
                             catch

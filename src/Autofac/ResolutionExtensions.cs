@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -1031,14 +1031,13 @@ namespace Autofac
                 throw new ArgumentNullException(nameof(context));
             }
 
-            IComponentRegistration registration;
-            if (!context.ComponentRegistry.TryGetRegistration(service, out registration))
+            if (!context.ComponentRegistry.TryGetRegistration(service, out var registration))
             {
                 instance = null;
                 return false;
             }
 
-            instance = context.ResolveComponent(registration, parameters);
+            instance = context.ResolveComponent(new ResolveRequest(service, registration, parameters));
             return true;
         }
     }

@@ -1,36 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Reflection;
-using Autofac.Builder;
 using Autofac.Core;
 using Autofac.Core.Activators.Reflection;
 using Xunit;
 
 namespace Autofac.Test.Builder
 {
+    // It may or may not be interesting long-term to ignore value type arrays/lists
+    // so the tests around that are not part of the specification.
     public class PropertyInjectionTests
     {
-        public class HasSetter
-        {
-            private string _val;
-
-            public string Val
-            {
-                get
-                {
-                    return _val;
-                }
-
-                set
-                {
-                    _val = value;
-                }
-            }
-        }
-
         [Fact]
         public void NullCheckTests()
         {
@@ -46,281 +27,15 @@ namespace Autofac.Test.Builder
         }
 
         [Fact]
-        public void SetterInjection()
+        public void SetterInjectionIgnoresArraysOfNullableValueTypes()
         {
-            var val = "Value";
-
             var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasSetter>().PropertiesAutowired();
-
+            builder.RegisterType<HasNullableValueTypeArray>().PropertiesAutowired();
             var container = builder.Build();
 
-            var instance = container.Resolve<HasSetter>();
+            var instance = container.Resolve<HasNullableValueTypeArray>();
 
-            Assert.NotNull(instance);
-            Assert.Equal(val, instance.Val);
-        }
-
-        [Fact]
-        public void SetterInjectionUnset()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasSetter>().PropertiesAutowired();
-
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasSetter>();
-
-            Assert.NotNull(instance);
-            Assert.Equal(val, instance.Val);
-        }
-
-        public class HasSetterWithValue
-        {
-            private string _val = "Default";
-
-            public string Val
-            {
-                get
-                {
-                    return _val;
-                }
-
-                set
-                {
-                    _val = value;
-                }
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionWithValue()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasSetterWithValue>().PropertiesAutowired();
-
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasSetterWithValue>();
-
-            Assert.NotNull(instance);
-            Assert.Equal(val, instance.Val);
-        }
-
-        public class HasPropReadOnly
-        {
-            private string _val = "Default";
-
-            public string Val
-            {
-                get
-                {
-                    return _val;
-                }
-
-                protected set
-                {
-                    _val = value;
-                }
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionReadOnly()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasPropReadOnly>().PropertiesAutowired();
-
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasPropReadOnly>();
-
-            Assert.NotNull(instance);
-            Assert.Equal("Default", instance.Val);
-        }
-
-        [Fact]
-        public void SetterInjectionUnsetReadOnly()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasPropReadOnly>().PropertiesAutowired();
-
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasPropReadOnly>();
-
-            Assert.NotNull(instance);
-            Assert.Equal("Default", instance.Val);
-        }
-
-        public class HasPropWriteOnly
-        {
-            private string _val;
-
-            public string Val
-            {
-                set
-                {
-                    _val = value;
-                }
-            }
-
-            public string GetVal()
-            {
-                return _val;
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionWriteOnly()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasPropWriteOnly>().PropertiesAutowired();
-
-            var container = builder.Build();
-            var instance = container.Resolve<HasPropWriteOnly>();
-
-            Assert.NotNull(instance);
-            Assert.Equal(val, instance.GetVal());
-        }
-
-        [Fact]
-        public void SetterInjectionUnsetWriteOnly()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasPropWriteOnly>().PropertiesAutowired();
-
-            var container = builder.Build();
-            var instance = container.Resolve<HasPropWriteOnly>();
-
-            Assert.NotNull(instance);
-            Assert.Equal(val, instance.GetVal());
-        }
-
-        public class SplitAccess
-        {
-            public bool GetterCalled
-            {
-                get;
-                set;
-            }
-
-            public bool SetterCalled
-            {
-                get;
-                set;
-            }
-
-            public string Value
-            {
-                private get
-                {
-                    GetterCalled = true;
-                    return null;
-                }
-
-                set
-                {
-                    SetterCalled = true;
-                }
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionPrivateGet()
-        {
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<SplitAccess>().PropertiesAutowired();
-
-            var container = builder.Build();
-            var instance = container.Resolve<SplitAccess>();
-
-            Assert.NotNull(instance);
-            Assert.True(instance.SetterCalled);
-            Assert.False(instance.GetterCalled);
-        }
-
-        public class HasSetterDerived : HasSetterBase
-        {
-        }
-
-        public class HasSetterBase
-        {
-            public string Val { get; set; }
-        }
-
-        [Fact]
-        public void SetterInjectionBaseClassProperty()
-        {
-            // Issue #2 from Autofac.Configuration - Ensure properties in base classes can be set by config.
-            var val = "Value";
-
-            var builder = new ContainerBuilder();
-            builder.RegisterInstance(val);
-            builder.RegisterType<HasSetterDerived>().PropertiesAutowired();
-
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasSetterDerived>();
-
-            Assert.NotNull(instance);
-            Assert.Equal(val, instance.Val);
-        }
-
-        public class Invokee
-        {
-            public int Param { get; set; }
-
-            public void Method(int param)
-            {
-                Param = param;
-            }
-        }
-
-        [Fact]
-        public void EventFiredWithContainerScope()
-        {
-            var pval = 12;
-            var builder = new ContainerBuilder();
-            builder.RegisterType<Invokee>()
-                .InstancePerLifetimeScope()
-                .OnActivated(e => e.Instance.Method(pval));
-            var container = builder.Build();
-            var inner = container.BeginLifetimeScope();
-            var invokee = inner.Resolve<Invokee>();
-            Assert.Equal(pval, invokee.Param);
-        }
-
-        public class HasValueTypeArray
-        {
-            public byte[] ByteArray { get; set; }
-
-            public HasValueTypeArray()
-            {
-                ByteArray = new byte[] { 1, 2, 3 };
-            }
+            Assert.Equal(new double?[] { null, 0.1, null }, instance.DoubleArray);
         }
 
         [Fact]
@@ -333,122 +48,6 @@ namespace Autofac.Test.Builder
             var instance = container.Resolve<HasValueTypeArray>();
 
             Assert.Equal(new byte[] { 1, 2, 3 }, instance.ByteArray);
-        }
-
-        public class HasNullableValueTypeArray
-        {
-            public double?[] DoubleArray { get; set; }
-
-            public HasNullableValueTypeArray()
-            {
-                DoubleArray = new double?[] { null, 0.1, null };
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionIgnoresArraysOfNullableValueTypes()
-        {
-            var builder = new ContainerBuilder();
-            builder.RegisterType<HasNullableValueTypeArray>().PropertiesAutowired();
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasNullableValueTypeArray>();
-
-            Assert.Equal(new double?[] { null, 0.1, null }, instance.DoubleArray);
-        }
-
-        public class HasValueTypeList
-        {
-            public IList<byte> ByteListInterface { get; set; }
-
-            public List<byte> ByteList { get; set; }
-
-            public HasValueTypeList()
-            {
-                ByteList = new List<byte> { 1, 2, 3 };
-                ByteListInterface = ByteList;
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionIgnoresListsOfValueTypes()
-        {
-            var builder = new ContainerBuilder();
-            builder.RegisterType<HasValueTypeList>().PropertiesAutowired();
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasValueTypeList>();
-
-            var expected = new List<byte> { 1, 2, 3 };
-            Assert.Equal(expected, instance.ByteListInterface);
-            Assert.Equal(expected, instance.ByteList);
-        }
-
-        public class HasNullableValueTypeList
-        {
-            public IList<double?> DoubleListInterface { get; set; }
-
-            public List<double?> DoubleList { get; set; }
-
-            public HasNullableValueTypeList()
-            {
-                DoubleList = new List<double?> { null, 0.1, null };
-                DoubleListInterface = DoubleList;
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionIgnoresListsOfNullableValueTypes()
-        {
-            var builder = new ContainerBuilder();
-            builder.RegisterType<HasNullableValueTypeList>().PropertiesAutowired();
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasNullableValueTypeList>();
-
-            var expected = new List<double?> { null, 0.1, null };
-            Assert.Equal(expected, instance.DoubleListInterface);
-            Assert.Equal(expected, instance.DoubleList);
-        }
-
-        public class HasValueTypeCollection
-        {
-            public ICollection<byte> ByteCollectionInterface { get; set; }
-
-            public Collection<byte> ByteCollection { get; set; }
-
-            public HasValueTypeCollection()
-            {
-                ByteCollection = new Collection<byte> { 1, 2, 3 };
-                ByteCollectionInterface = ByteCollection;
-            }
-        }
-
-        [Fact]
-        public void SetterInjectionIgnoresCollectionsOfValueTypes()
-        {
-            var builder = new ContainerBuilder();
-            builder.RegisterType<HasValueTypeCollection>().PropertiesAutowired();
-            var container = builder.Build();
-
-            var instance = container.Resolve<HasValueTypeCollection>();
-
-            var expected = new Collection<byte> { 1, 2, 3 };
-            Assert.Equal(expected, instance.ByteCollectionInterface);
-            Assert.Equal(expected, instance.ByteCollection);
-        }
-
-        public class HasNullableValueTypeCollection
-        {
-            public IReadOnlyCollection<double?> DoubleCollectionInterface { get; set; }
-
-            public ReadOnlyCollection<double?> DoubleCollection { get; set; }
-
-            public HasNullableValueTypeCollection()
-            {
-                DoubleCollection = new ReadOnlyCollection<double?>(new double?[] { null, 0.1, null });
-                DoubleCollectionInterface = DoubleCollection;
-            }
         }
 
         [Fact]
@@ -466,237 +65,117 @@ namespace Autofac.Test.Builder
         }
 
         [Fact]
-        public void InjectProperties()
+        public void SetterInjectionIgnoresCollectionsOfValueTypes()
         {
-            const string str = "test";
-
-            var cb = new ContainerBuilder();
-            cb.RegisterInstance(str);
-            var c = cb.Build();
-
-            var obj = new WithPropInjection();
-
-            Assert.Null(obj.Prop);
-            c.InjectUnsetProperties(obj);
-            Assert.Equal(str, obj.Prop);
-            Assert.Null(obj.GetProp2());
-        }
-
-        [Fact]
-        public void InjectUnsetProperties()
-        {
-            const string str = "test";
-            const string otherStr = "someString";
-
-            var cb = new ContainerBuilder();
-            cb.RegisterInstance(str);
-            var c = cb.Build();
-
-            var obj = new WithPropInjection
-            {
-                Prop = otherStr,
-            };
-
-            Assert.Equal(otherStr, obj.Prop);
-            c.InjectUnsetProperties(obj);
-            Assert.Equal(otherStr, obj.Prop);
-            Assert.Null(obj.GetProp2());
-        }
-
-        [Fact]
-        public void InjectPropertiesWithSelector()
-        {
-            const string str = "test";
-
-            var cb = new ContainerBuilder();
-            cb.RegisterInstance(str);
-            var c = cb.Build();
-
-            var obj = new WithPropInjection();
-
-            Assert.Null(obj.Prop);
-            c.InjectProperties(obj, new DelegatePropertySelector((p, _) => p.GetCustomAttributes<InjectAttribute>().Any()));
-            Assert.Null(obj.Prop);
-            Assert.Equal(str, obj.GetProp2());
-        }
-
-        [Fact]
-        public void ResolvePropertiesWithCustomDelegate_ReflectionRegistration()
-        {
-            var propertyInfos = new List<PropertyInfo>();
-
-            var cb = new ContainerBuilder();
-            cb.RegisterType<WithPropInjection>()
-                .PropertiesAutowired((propInfo, instance) =>
-                {
-                    propertyInfos.Add(propInfo);
-                    return false;
-                });
-            cb.RegisterInstance("test"); // Must register, otherwise delegate won't be called
-
-            var c = cb.Build();
-            var result = c.Resolve<WithPropInjection>();
-            var expected = typeof(WithPropInjection).GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-            Assert.Equal(expected, propertyInfos.ToArray());
-            Assert.NotNull(result);
-            Assert.Null(result.Prop);
-            Assert.Null(result.GetProp2());
-        }
-
-        [Fact]
-        public void ResolvePropertiesWithCustomDelegate_DelegateRegistration()
-        {
-            var propertyInfos = new List<PropertyInfo>();
-
-            var cb = new ContainerBuilder();
-            cb.Register(_ => new WithPropInjection())
-                .PropertiesAutowired((propInfo, instance) =>
-                {
-                    propertyInfos.Add(propInfo);
-                    return false;
-                });
-            cb.RegisterInstance("test"); // Must register, otherwise delegate won't be called
-
-            var c = cb.Build();
-            var result = c.Resolve<WithPropInjection>();
-            var expected = typeof(WithPropInjection).GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-            Assert.Equal(expected, propertyInfos.ToArray());
-            Assert.NotNull(result);
-            Assert.Null(result.Prop);
-            Assert.Null(result.GetProp2());
-        }
-
-        [Fact]
-        public void ResolvePropertiesWithCustomImplementation_ReflectionRegistration()
-        {
-            const string str = "test";
-
-            var cb = new ContainerBuilder();
-            cb.RegisterType<WithPropInjection>()
-                .PropertiesAutowired(new InjectAttributePropertySelector());
-            cb.RegisterInstance(str);
-
-            var c = cb.Build();
-            var result = c.Resolve<WithPropInjection>();
-
-            Assert.NotNull(result);
-            Assert.Null(result.Prop);
-            Assert.Equal(str, result.GetProp2());
-        }
-
-        [Fact]
-        public void ResolvePropertiesWithCustomImplementation_DelegateRegistration()
-        {
-            const string str = "test";
-
-            var cb = new ContainerBuilder();
-            cb.Register(_ => new WithPropInjection())
-                .PropertiesAutowired(new InjectAttributePropertySelector());
-            cb.RegisterInstance(str);
-
-            var c = cb.Build();
-            var result = c.Resolve<WithPropInjection>();
-
-            Assert.NotNull(result);
-            Assert.Null(result.Prop);
-            Assert.Equal(str, result.GetProp2());
-        }
-
-        [Fact]
-        public void PropertySpecifiedAsResolveParameterWhenAutowired()
-        {
-            // Issue #289 tried to get parameters to work as passed in directly to resolve
-            // but issue #789 found a problem with trying to do that. Now it's just
-            // manual property injection that allows parameters.
             var builder = new ContainerBuilder();
-            builder.RegisterType<ConstructorParamNotAttachedToProperty>().WithParameter(TypedParameter.From("ctor")).PropertiesAutowired();
+            builder.RegisterType<HasValueTypeCollection>().PropertiesAutowired();
             var container = builder.Build();
 
-            var instance = container.Resolve<ConstructorParamNotAttachedToProperty>(new NamedPropertyParameter("Name", "value"));
-            Assert.Equal("ctor", instance._id);
-            Assert.Equal("value", instance.Name);
+            var instance = container.Resolve<HasValueTypeCollection>();
+
+            var expected = new Collection<byte> { 1, 2, 3 };
+            Assert.Equal(expected, instance.ByteCollectionInterface);
+            Assert.Equal(expected, instance.ByteCollection);
         }
 
         [Fact]
-        public void PropertySpecifiedAsResolveParameterWhenAutowiredMayBeBothConstructorAndProperty()
+        public void SetterInjectionIgnoresListsOfNullableValueTypes()
         {
-            // Issue #289 tried to get parameters to work as passed in directly to resolve
-            // but issue #789 found a problem with trying to do that. Now it's just
-            // manual property injection that allows parameters.
             var builder = new ContainerBuilder();
-            builder.RegisterType<ConstructorParamNotAttachedToProperty>().PropertiesAutowired();
+            builder.RegisterType<HasNullableValueTypeList>().PropertiesAutowired();
             var container = builder.Build();
 
-            var instance = container.Resolve<ConstructorParamNotAttachedToProperty>(TypedParameter.From("test"));
-            Assert.Equal("test", instance._id);
-            Assert.Equal("test", instance.Name);
+            var instance = container.Resolve<HasNullableValueTypeList>();
+
+            var expected = new List<double?> { null, 0.1, null };
+            Assert.Equal(expected, instance.DoubleListInterface);
+            Assert.Equal(expected, instance.DoubleList);
         }
 
         [Fact]
-        public void PropertySpecifiedAsResolveParameterNoRegistrationPropertySpecified()
+        public void SetterInjectionIgnoresListsOfValueTypes()
         {
-            // Issue #289 tried to get parameters to work as passed in directly to resolve
-            // but issue #789 found a problem with trying to do that. Now it's just
-            // manual property injection that allows parameters.
             var builder = new ContainerBuilder();
-            builder.RegisterType<ConstructorParamNotAttachedToProperty>().WithParameter(TypedParameter.From("ctor"));
+            builder.RegisterType<HasValueTypeList>().PropertiesAutowired();
             var container = builder.Build();
 
-            var instance = container.Resolve<ConstructorParamNotAttachedToProperty>();
-            Assert.Null(instance.Name);
-            container.InjectProperties(instance, new NamedPropertyParameter("Name", "value"));
-            Assert.Equal("value", instance.Name);
+            var instance = container.Resolve<HasValueTypeList>();
+
+            var expected = new List<byte> { 1, 2, 3 };
+            Assert.Equal(expected, instance.ByteListInterface);
+            Assert.Equal(expected, instance.ByteList);
         }
 
-        private class InjectAttributePropertySelector : IPropertySelector
+        public class HasNullableValueTypeArray
         {
-            public bool InjectProperty(PropertyInfo propertyInfo, object instance)
+            public HasNullableValueTypeArray()
             {
-                return propertyInfo.GetCustomAttributes<InjectAttribute>().Any();
-            }
-        }
-
-        private class InjectAttribute : Attribute
-        {
-        }
-
-        private class WithPropInjection
-        {
-            public string Prop { get; set; }
-
-            [Inject]
-            private string Prop2 { get; set; }
-
-            public string GetProp2() => Prop2;
-        }
-
-        [Fact]
-        public void TypedParameterForConstructorShouldNotAttachToProperty()
-        {
-            // Issue #789: If the parameters automatically flow from resolve
-            // to property injection when PropertiesAutowired isn't specified
-            // then properties get inadvertently resolved.
-            var cb = new ContainerBuilder();
-            cb.RegisterType<ConstructorParamNotAttachedToProperty>();
-            var container = cb.Build();
-            var resolved = container.Resolve<ConstructorParamNotAttachedToProperty>(TypedParameter.From("test"));
-            Assert.Equal("test", resolved._id);
-            Assert.Null(resolved.Name);
-        }
-
-        private class ConstructorParamNotAttachedToProperty
-        {
-            public ConstructorParamNotAttachedToProperty(string id)
-            {
-                this._id = id;
+                this.DoubleArray = new double?[] { null, 0.1, null };
             }
 
-            [SuppressMessage("SA1401", "SA1401")]
-            public string _id = null;
+            public double?[] DoubleArray { get; set; }
+        }
 
-            public string Name { get; set; }
+        public class HasNullableValueTypeCollection
+        {
+            public HasNullableValueTypeCollection()
+            {
+                this.DoubleCollection = new ReadOnlyCollection<double?>(new double?[] { null, 0.1, null });
+                this.DoubleCollectionInterface = this.DoubleCollection;
+            }
+
+            public ReadOnlyCollection<double?> DoubleCollection { get; set; }
+
+            public IReadOnlyCollection<double?> DoubleCollectionInterface { get; set; }
+        }
+
+        public class HasNullableValueTypeList
+        {
+            public HasNullableValueTypeList()
+            {
+                this.DoubleList = new List<double?> { null, 0.1, null };
+                this.DoubleListInterface = this.DoubleList;
+            }
+
+            public List<double?> DoubleList { get; set; }
+
+            public IList<double?> DoubleListInterface { get; set; }
+        }
+
+        public class HasValueTypeArray
+        {
+            public HasValueTypeArray()
+            {
+                this.ByteArray = new byte[] { 1, 2, 3 };
+            }
+
+            public byte[] ByteArray { get; set; }
+        }
+
+        public class HasValueTypeCollection
+        {
+            public HasValueTypeCollection()
+            {
+                this.ByteCollection = new Collection<byte> { 1, 2, 3 };
+                this.ByteCollectionInterface = this.ByteCollection;
+            }
+
+            public Collection<byte> ByteCollection { get; set; }
+
+            public ICollection<byte> ByteCollectionInterface { get; set; }
+        }
+
+        public class HasValueTypeList
+        {
+            public HasValueTypeList()
+            {
+                this.ByteList = new List<byte> { 1, 2, 3 };
+                this.ByteListInterface = this.ByteList;
+            }
+
+            public List<byte> ByteList { get; set; }
+
+            public IList<byte> ByteListInterface { get; set; }
         }
     }
 }

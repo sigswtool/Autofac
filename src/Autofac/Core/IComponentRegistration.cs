@@ -1,6 +1,6 @@
 // This software is part of the Autofac IoC container
-// Copyright � 2011 Autofac Contributors
-// http://autofac.org
+// Copyright © 2011 Autofac Contributors
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -76,9 +76,8 @@ namespace Autofac.Core
         IComponentRegistration Target { get; }
 
         /// <summary>
-        /// Fired when a new instance is required. The instance can be
-        /// provided in order to skip the regular activator, by setting the Instance property in
-        /// the provided event arguments.
+        /// Fired when a new instance is required, prior to activation.
+        /// Can be used to provide Autofac with additional parameters, used during activation.
         /// </summary>
         event EventHandler<PreparingEventArgs> Preparing;
 

@@ -14,6 +14,11 @@ namespace Autofac.Test.Features.Decorators
         {
         }
 
+        // ReSharper disable once UnusedTypeParameter
+        public interface ISomeOtherService<T>
+        {
+        }
+
         public interface IDecoratedService<T> : IService<T>
         {
             IDecoratedService<T> Decorated { get; }
@@ -39,6 +44,11 @@ namespace Autofac.Test.Features.Decorators
             {
                 Parameter = parameter;
             }
+        }
+
+        public class ImplementorWithSomeOtherService<T> : IDecoratedService<T>, ISomeOtherService<T>
+        {
+            public IDecoratedService<T> Decorated => this;
         }
 
         public abstract class Decorator<T> : IDecoratedService<T>
@@ -190,7 +200,10 @@ namespace Autofac.Test.Features.Decorators
         public void DecoratedRegistrationCanIncludeOtherServices()
         {
             var builder = new ContainerBuilder();
-            builder.RegisterGeneric(typeof(ImplementorA<>)).As(typeof(IDecoratedService<>)).As(typeof(IService<>));
+
+            // #963: The SingleInstance here is important - a single component may expose multiple services.
+            // If that component is decorated, the decorator ALSO needs to expose all of those services.
+            builder.RegisterGeneric(typeof(ImplementorA<>)).As(typeof(IDecoratedService<>)).As(typeof(IService<>)).SingleInstance();
             builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
             var container = builder.Build();
 
@@ -283,7 +296,9 @@ namespace Autofac.Test.Features.Decorators
 
             var factory = container.Resolve<Func<IDecoratedService<int>>>();
 
-            Assert.IsType<DecoratorA<int>>(factory());
+            var decoratedService = factory();
+            Assert.IsType<DecoratorA<int>>(decoratedService);
+            Assert.IsType<ImplementorA<int>>(decoratedService.Decorated);
         }
 
         [Fact]
@@ -296,7 +311,9 @@ namespace Autofac.Test.Features.Decorators
 
             var lazy = container.Resolve<Lazy<IDecoratedService<int>>>();
 
-            Assert.IsType<DecoratorA<int>>(lazy.Value);
+            var decoratedService = lazy.Value;
+            Assert.IsType<DecoratorA<int>>(decoratedService);
+            Assert.IsType<ImplementorA<int>>(decoratedService.Decorated);
         }
 
         [Fact]
@@ -517,6 +534,78 @@ namespace Autofac.Test.Features.Decorators
         }
 
         [Fact]
+        public void DecoratorAppliedOnlyOnceToComponentWithExternalRegistrySource()
+        {
+            // #965: A nested lifetime scope that has a registration lambda
+            // causes the decorator to be applied twice - once for the container
+            // level, and once for the scope level.
+            var builder = new ContainerBuilder();
+            builder.RegisterGeneric(typeof(ImplementorA<>)).As(typeof(IDecoratedService<>));
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            var container = builder.Build();
+
+            var scope = container.BeginLifetimeScope(b => { });
+            var service = scope.Resolve<IDecoratedService<int>>();
+            Assert.IsType<DecoratorA<int>>(service);
+            Assert.IsType<ImplementorA<int>>(service.Decorated);
+        }
+
+        [Fact]
+        public void DecoratorCanBeAppliedTwiceIntentionallyWithExternalRegistrySource()
+        {
+            // #965: A nested lifetime scope that has a registration lambda
+            // causes the decorator to be applied twice - once for the container
+            // level, and once for the scope level.
+            var builder = new ContainerBuilder();
+            builder.RegisterGeneric(typeof(ImplementorA<>)).As(typeof(IDecoratedService<>));
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            var container = builder.Build();
+
+            var scope = container.BeginLifetimeScope(b => { });
+            var service = scope.Resolve<IDecoratedService<int>>();
+            Assert.IsType<DecoratorA<int>>(service);
+            Assert.IsType<DecoratorA<int>>(service.Decorated);
+            Assert.IsType<ImplementorA<int>>(service.Decorated.Decorated);
+        }
+
+        [Fact]
+        public void DecoratorCanBeAppliedTwice()
+        {
+            var builder = new ContainerBuilder();
+            builder.RegisterGeneric(typeof(ImplementorA<>)).As(typeof(IDecoratedService<>));
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            var container = builder.Build();
+
+            var service = container.Resolve<IDecoratedService<int>>();
+
+            Assert.IsType<DecoratorA<int>>(service);
+            Assert.IsType<DecoratorA<int>>(service.Decorated);
+            Assert.IsType<ImplementorA<int>>(service.Decorated.Decorated);
+        }
+
+        [Fact]
+        public void DecoratorCanBeAppliedTwiceInChildLifetimeScope()
+        {
+            var builder = new ContainerBuilder();
+            builder.RegisterGeneric(typeof(ImplementorA<>)).As(typeof(IDecoratedService<>));
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            var container = builder.Build();
+
+            var scope = container.BeginLifetimeScope(b => b.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>)));
+            var scopeInstance = scope.Resolve<IDecoratedService<int>>();
+
+            Assert.IsType<DecoratorA<int>>(scopeInstance);
+            Assert.IsType<DecoratorA<int>>(scopeInstance.Decorated);
+            Assert.IsType<ImplementorA<int>>(scopeInstance.Decorated.Decorated);
+
+            var rootInstance = container.Resolve<IDecoratedService<int>>();
+            Assert.IsType<DecoratorA<int>>(rootInstance);
+            Assert.IsType<ImplementorA<int>>(rootInstance.Decorated);
+        }
+
+        [Fact]
         public void DecoratorCanBeAppliedToServiceRegisteredInChildLifetimeScope()
         {
             var builder = new ContainerBuilder();
@@ -527,6 +616,7 @@ namespace Autofac.Test.Features.Decorators
             var instance = scope.Resolve<IDecoratedService<int>>();
 
             Assert.IsType<DecoratorA<int>>(instance);
+            Assert.IsType<ImplementorA<int>>(instance.Decorated);
         }
 
         [Fact]
@@ -540,6 +630,7 @@ namespace Autofac.Test.Features.Decorators
 
             var scopedInstance = scope.Resolve<IDecoratedService<int>>();
             Assert.IsType<DecoratorA<int>>(scopedInstance);
+            Assert.IsType<ImplementorA<int>>(scopedInstance.Decorated);
 
             var rootInstance = container.Resolve<IDecoratedService<int>>();
             Assert.IsType<ImplementorA<int>>(rootInstance);
@@ -654,6 +745,23 @@ namespace Autofac.Test.Features.Decorators
 
             Assert.Equal(1, decorator.DisposeCallCount);
             Assert.Equal(1, decorated.DisposeCallCount);
+        }
+
+        [Theory]
+        [InlineData(typeof(IDecoratedService<>), typeof(ISomeOtherService<>))]
+        [InlineData(typeof(ISomeOtherService<>), typeof(IDecoratedService<>))]
+        public void DecoratorShouldBeAppliedRegardlessOfServiceOrder(Type firstService, Type secondService)
+        {
+            var builder = new ContainerBuilder();
+
+            builder.RegisterGeneric(typeof(ImplementorWithSomeOtherService<>)).As(firstService, secondService);
+            builder.RegisterGenericDecorator(typeof(DecoratorA<>), typeof(IDecoratedService<>));
+            var container = builder.Build();
+
+            var instance = container.Resolve<IDecoratedService<int>>();
+
+            Assert.IsType<DecoratorA<int>>(instance);
+            Assert.IsType<ImplementorWithSomeOtherService<int>>(instance.Decorated);
         }
     }
 }

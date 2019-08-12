@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -51,10 +51,10 @@ namespace Autofac.Core.Activators.Reflection
             if (pi == null) throw new ArgumentNullException(nameof(pi));
             if (context == null) throw new ArgumentNullException(nameof(context));
 
-            IComponentRegistration registration;
-            if (context.ComponentRegistry.TryGetRegistration(new TypedService(pi.ParameterType), out registration))
+            var service = new TypedService(pi.ParameterType);
+            if (context.ComponentRegistry.TryGetRegistration(service, out var registration))
             {
-                valueProvider = () => context.ResolveComponent(registration, Enumerable.Empty<Parameter>());
+                valueProvider = () => context.ResolveComponent(new ResolveRequest(service, registration, Enumerable.Empty<Parameter>()));
                 return true;
             }
 

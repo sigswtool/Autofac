@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -174,8 +174,31 @@ namespace Autofac.Util
 
         private static bool ParameterCompatibleWithTypeConstraint(Type parameter, Type constraint)
         {
-            return constraint.GetTypeInfo().IsAssignableFrom(parameter.GetTypeInfo()) ||
-                   Traverse.Across(parameter, p => p.GetTypeInfo().BaseType)
+            if (constraint.GetTypeInfo().IsAssignableFrom(parameter.GetTypeInfo()))
+            {
+                return true;
+            }
+
+            var allGenericParametersMatch = false;
+            var baseType = parameter.GetTypeInfo().BaseType ?? parameter;
+            if (!constraint.GetTypeInfo().IsInterface &&
+                baseType.GetTypeInfo().IsGenericType &&
+                baseType.GenericTypeArguments.Length > 0 &&
+                baseType.GenericTypeArguments.Length == constraint.GenericTypeArguments.Length)
+            {
+                allGenericParametersMatch = true;
+                for (int i = 0; i < baseType.GenericTypeArguments.Length; i++)
+                {
+                    var paramArg = baseType.GenericTypeArguments[i];
+                    var constraintArg = constraint.GenericTypeArguments[i];
+                    var constraintArgIsGeneric = constraintArg.GetTypeInfo().IsGenericType;
+
+                    allGenericParametersMatch &= paramArg.IsClosedTypeOf(constraintArgIsGeneric ? constraintArg.GetGenericTypeDefinition() : constraintArg);
+                }
+            }
+
+            return allGenericParametersMatch ||
+                Traverse.Across(parameter, p => p.GetTypeInfo().BaseType)
                        .Concat(parameter.GetTypeInfo().ImplementedInterfaces)
                        .Any(p => ParameterEqualsConstraint(p, constraint));
         }

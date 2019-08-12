@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -107,7 +107,7 @@ namespace Autofac.Features.Variance
 
             return variantRegistrations
                 .Select(vr => RegistrationBuilder
-                    .ForDelegate((c, p) => c.ResolveComponent(vr, p))
+                    .ForDelegate((c, p) => c.ResolveComponent(new ResolveRequest(service, vr, p)))
                     .Targeting(vr)
                     .As(service)
                     .WithMetadata(IsContravariantAdapter, true)

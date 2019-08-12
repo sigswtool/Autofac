@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -116,7 +116,7 @@ namespace Autofac.Features.Collections
                 (c, p) =>
                 {
                     var elements = c.ComponentRegistry.RegistrationsFor(elementTypeService).OrderBy(cr => cr.GetRegistrationOrder());
-                    var items = elements.Select(cr => c.ResolveComponent(cr, p));
+                    var items = elements.Select(cr => c.ResolveComponent(new ResolveRequest(elementTypeService, cr, p)));
 
                     return generator(items);
                 });

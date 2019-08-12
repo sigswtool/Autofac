@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2018 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -26,6 +26,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Autofac.Core;
+using Autofac.Core.Registration;
 
 namespace Autofac.Features.Decorators
 {
@@ -37,6 +38,11 @@ namespace Autofac.Features.Decorators
             IComponentContext context,
             IEnumerable<Parameter> parameters)
         {
+            var instanceType = instance.GetType();
+
+            // Issue #965: Do not apply the decorator if the registration is for an adapter.
+            if (registration.IsAdapting()) return instance;
+
             var decoratorRegistrations = context.ComponentRegistry.DecoratorsFor(registration);
 
             // ReSharper disable once PossibleMultipleEnumeration
@@ -56,7 +62,7 @@ namespace Autofac.Features.Decorators
             var serviceType = decorators[0].Service.ServiceType;
             var resolveParameters = parameters as Parameter[] ?? parameters.ToArray();
 
-            var decoratorContext = DecoratorContext.Create(instance.GetType(), serviceType, instance);
+            var decoratorContext = DecoratorContext.Create(instanceType, serviceType, instance);
 
             foreach (var decorator in decorators)
             {
@@ -65,7 +71,7 @@ namespace Autofac.Features.Decorators
                 var serviceParameter = new TypedParameter(serviceType, instance);
                 var contextParameter = new TypedParameter(typeof(IDecoratorContext), decoratorContext);
                 var invokeParameters = resolveParameters.Concat(new Parameter[] { serviceParameter, contextParameter });
-                instance = context.ResolveComponent(decorator.Registration, invokeParameters);
+                instance = context.ResolveComponent(new ResolveRequest(decorator.Service, decorator.Registration, invokeParameters));
 
                 decoratorContext = decoratorContext.UpdateContext(instance);
             }

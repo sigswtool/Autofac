@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -42,15 +42,15 @@ namespace Autofac.Core.Resolving
         private readonly ISharingLifetimeScope _activationScope;
         private object _newInstance;
         private bool _executed;
+        private const string ActivatorChainExceptionData = "ActivatorChain";
 
         public InstanceLookup(
-            IComponentRegistration registration,
             IResolveOperation context,
             ISharingLifetimeScope mostNestedVisibleScope,
-            IEnumerable<Parameter> parameters)
+            ResolveRequest request)
         {
-            Parameters = parameters;
-            ComponentRegistration = registration;
+            Parameters = request.Parameters;
+            ComponentRegistration = request.Registration;
             _context = context;
 
             try
@@ -60,13 +60,13 @@ namespace Autofac.Core.Resolving
             catch (DependencyResolutionException ex)
             {
                 var services = new StringBuilder();
-                foreach (var s in registration.Services)
+                foreach (var s in ComponentRegistration.Services)
                 {
                     services.Append("- ");
                     services.AppendLine(s.Description);
                 }
 
-                var message = String.Format(CultureInfo.CurrentCulture, ComponentActivationResources.UnableToLocateLifetimeScope, registration.Activator.LimitType, services);
+                var message = string.Format(CultureInfo.CurrentCulture, ComponentActivationResources.UnableToLocateLifetimeScope, ComponentRegistration.Activator.LimitType, services);
                 throw new DependencyResolutionException(message, ex);
             }
         }
@@ -74,7 +74,7 @@ namespace Autofac.Core.Resolving
         public object Execute()
         {
             if (_executed)
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, ComponentActivationResources.ActivationAlreadyExecuted, this.ComponentRegistration));
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, ComponentActivationResources.ActivationAlreadyExecuted, this.ComponentRegistration));
 
             _executed = true;
 
@@ -108,6 +108,7 @@ namespace Autofac.Core.Resolving
 
         private bool NewInstanceActivated => _newInstance != null;
 
+        [SuppressMessage("CA1031", "CA1031", Justification = "General exception gets rethrown in a PropagateActivationException.")]
         private object Activate(IEnumerable<Parameter> parameters, out object decoratorTarget)
         {
             ComponentRegistration.RaisePreparing(this, ref parameters);
@@ -130,7 +131,7 @@ namespace Autofac.Core.Resolving
             }
             catch (Exception ex)
             {
-                throw new DependencyResolutionException(String.Format(CultureInfo.CurrentCulture, ComponentActivationResources.ErrorDuringActivation, this.ComponentRegistration), ex);
+                throw PropagateActivationException(this.ComponentRegistration.Activator, ex);
             }
 
             if (ComponentRegistration.Ownership == InstanceOwnership.OwnedByLifetimeScope)
@@ -148,6 +149,23 @@ namespace Autofac.Core.Resolving
             return _newInstance;
         }
 
+        private static DependencyResolutionException PropagateActivationException(IInstanceActivator activator, Exception exception)
+        {
+            var activatorChain = activator.DisplayName();
+            var innerException = exception;
+
+            if (exception.Data.Contains(ActivatorChainExceptionData) &&
+                exception.Data[ActivatorChainExceptionData] is string innerChain)
+            {
+                activatorChain = activatorChain + " -> " + innerChain;
+                innerException = exception.InnerException;
+            }
+
+            var result = new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, ComponentActivationResources.ErrorDuringActivation, activatorChain), innerException);
+            result.Data[ActivatorChainExceptionData] = activatorChain;
+            return result;
+        }
+
         public void Complete()
         {
             if (!NewInstanceActivated) return;
@@ -163,9 +181,9 @@ namespace Autofac.Core.Resolving
 
         public IComponentRegistry ComponentRegistry => _activationScope.ComponentRegistry;
 
-        public object ResolveComponent(IComponentRegistration registration, IEnumerable<Parameter> parameters)
+        public object ResolveComponent(ResolveRequest request)
         {
-            return _context.GetOrCreateInstance(_activationScope, registration, parameters);
+            return _context.GetOrCreateInstance(_activationScope, request);
         }
 
         public IComponentRegistration ComponentRegistration { get; }

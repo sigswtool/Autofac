@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -27,6 +27,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Autofac.Core.Registration
 {
@@ -35,6 +36,8 @@ namespace Autofac.Core.Registration
     /// </summary>
     internal class ServiceRegistrationInfo
     {
+        private volatile bool _isInitialized;
+
         [SuppressMessage("Microsoft.Performance", "CA1823:AvoidUnusedPrivateFields", Justification = "The _service field is useful in debugging and diagnostics.")]
         private readonly Service _service;
 
@@ -76,9 +79,13 @@ namespace Autofac.Core.Registration
         /// <summary>
         /// Gets a value indicating whether the first time a service is requested, initialization (e.g. reading from sources)
         /// happens. This value will then be set to true. Calling many methods on this type before
-        /// initialisation is an error.
+        /// initialization is an error.
         /// </summary>
-        public bool IsInitialized { get; private set; }
+        public bool IsInitialized
+        {
+            get => _isInitialized;
+            private set => _isInitialized = value;
+        }
 
         /// <summary>
         /// Gets the known implementations. The first implementation is a default one.
@@ -103,6 +110,7 @@ namespace Autofac.Core.Registration
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RequiresInitialization()
         {
             if (!IsInitialized)

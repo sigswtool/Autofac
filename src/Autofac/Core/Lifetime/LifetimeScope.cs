@@ -1,6 +1,6 @@
 ﻿// This software is part of the Autofac IoC container
 // Copyright © 2011 Autofac Contributors
-// http://autofac.org
+// https://autofac.org
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -24,11 +24,12 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Autofac.Builder;
 using Autofac.Core.Registration;
 using Autofac.Core.Resolving;
@@ -47,9 +48,7 @@ namespace Autofac.Core.Lifetime
         /// Protects shared instances from concurrent access. Other members and the base class are threadsafe.
         /// </summary>
         private readonly object _synchRoot = new object();
-        private readonly IDictionary<Guid, object> _sharedInstances = new Dictionary<Guid, object>();
-
-        private readonly ISharingLifetimeScope _parent;
+        private readonly ConcurrentDictionary<Guid, object> _sharedInstances = new ConcurrentDictionary<Guid, object>();
 
         internal static Guid SelfRegistrationId { get; } = Guid.NewGuid();
 
@@ -79,10 +78,8 @@ namespace Autofac.Core.Lifetime
         protected LifetimeScope(IComponentRegistry componentRegistry, LifetimeScope parent, object tag)
             : this(componentRegistry, tag)
         {
-            if (parent == null) throw new ArgumentNullException(nameof(parent));
-
-            _parent = parent;
-            RootLifetimeScope = _parent.RootLifetimeScope;
+            ParentLifetimeScope = parent ?? throw new ArgumentNullException(nameof(parent));
+            RootLifetimeScope = ParentLifetimeScope.RootLifetimeScope;
         }
 
         /// <summary>
@@ -93,12 +90,9 @@ namespace Autofac.Core.Lifetime
         public LifetimeScope(IComponentRegistry componentRegistry, object tag)
             : this()
         {
-            if (componentRegistry == null) throw new ArgumentNullException(nameof(componentRegistry));
-            if (tag == null) throw new ArgumentNullException(nameof(tag));
-
-            ComponentRegistry = componentRegistry;
+            ComponentRegistry = componentRegistry ?? throw new ArgumentNullException(nameof(componentRegistry));
+            Tag = tag ?? throw new ArgumentNullException(nameof(tag));
             RootLifetimeScope = this;
-            Tag = tag;
         }
 
         /// <summary>
@@ -130,6 +124,17 @@ namespace Autofac.Core.Lifetime
         {
             CheckNotDisposed();
 
+            CheckTagIsUnique(tag);
+
+            var registry = new CopyOnWriteRegistry(ComponentRegistry, () => CreateScopeRestrictedRegistry(tag, NoConfiguration));
+            var scope = new LifetimeScope(registry, this, tag);
+            scope.Disposer.AddInstanceForDisposal(registry);
+            RaiseBeginning(scope);
+            return scope;
+        }
+
+        private void CheckTagIsUnique(object tag)
+        {
             ISharingLifetimeScope parentScope = this;
             while (parentScope != RootLifetimeScope)
             {
@@ -141,12 +146,6 @@ namespace Autofac.Core.Lifetime
 
                 parentScope = parentScope.ParentLifetimeScope;
             }
-
-            var registry = new CopyOnWriteRegistry(ComponentRegistry, () => CreateScopeRestrictedRegistry(tag, NoConfiguration));
-            var scope = new LifetimeScope(registry, this, tag);
-            scope.Disposer.AddInstanceForDisposal(registry);
-            RaiseBeginning(scope);
-            return scope;
         }
 
         [SuppressMessage("CA1030", "CA1030", Justification = "This method raises the event; it's not the event proper.")]
@@ -205,6 +204,7 @@ namespace Autofac.Core.Lifetime
             if (configurationAction == null) throw new ArgumentNullException(nameof(configurationAction));
 
             CheckNotDisposed();
+            CheckTagIsUnique(tag);
 
             var locals = CreateScopeRestrictedRegistry(tag, configurationAction);
             var scope = new LifetimeScope(locals, this, tag);
@@ -258,33 +258,23 @@ namespace Autofac.Core.Lifetime
             return locals;
         }
 
-        /// <summary>
-        /// Resolve an instance of the provided registration within the context.
-        /// </summary>
-        /// <param name="registration">The registration.</param>
-        /// <param name="parameters">Parameters for the instance.</param>
-        /// <returns>
-        /// The component instance.
-        /// </returns>
-        /// <exception cref="Autofac.Core.Registration.ComponentNotRegisteredException"/>
-        /// <exception cref="DependencyResolutionException"/>
-        public object ResolveComponent(IComponentRegistration registration, IEnumerable<Parameter> parameters)
+        /// <inheritdoc />
+        public object ResolveComponent(ResolveRequest request)
         {
-            if (registration == null) throw new ArgumentNullException(nameof(registration));
-            if (parameters == null) throw new ArgumentNullException(nameof(parameters));
+            if (request == null) throw new ArgumentNullException(nameof(request));
 
             CheckNotDisposed();
 
             var operation = new ResolveOperation(this);
             var handler = ResolveOperationBeginning;
             handler?.Invoke(this, new ResolveOperationBeginningEventArgs(operation));
-            return operation.Execute(registration, parameters);
+            return operation.Execute(request);
         }
 
         /// <summary>
         /// Gets the parent of this node of the hierarchy, or null.
         /// </summary>
-        public ISharingLifetimeScope ParentLifetimeScope => _parent;
+        public ISharingLifetimeScope ParentLifetimeScope { get; }
 
         /// <summary>
         /// Gets the root of the sharing hierarchy.
@@ -302,20 +292,20 @@ namespace Autofac.Core.Lifetime
         {
             if (creator == null) throw new ArgumentNullException(nameof(creator));
 
+            if (_sharedInstances.TryGetValue(id, out var result)) return result;
+
             lock (_synchRoot)
             {
-                object result;
-                if (!_sharedInstances.TryGetValue(id, out result))
-                {
-                    result = creator();
-                    if (_sharedInstances.ContainsKey(id))
-                        throw new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, LifetimeScopeResources.SelfConstructingDependencyDetected, result.GetType().FullName));
+                if (_sharedInstances.TryGetValue(id, out result)) return result;
 
-                    _sharedInstances.Add(id, result);
-                }
+                result = creator();
+                if (_sharedInstances.ContainsKey(id))
+                    throw new DependencyResolutionException(string.Format(CultureInfo.CurrentCulture, LifetimeScopeResources.SelfConstructingDependencyDetected, result.GetType().FullName));
 
-                return result;
+                _sharedInstances.TryAdd(id, result);
             }
+
+            return result;
         }
 
         /// <summary>
@@ -362,6 +352,7 @@ namespace Autofac.Core.Lifetime
             base.Dispose(disposing);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CheckNotDisposed()
         {
             if (IsDisposed)
