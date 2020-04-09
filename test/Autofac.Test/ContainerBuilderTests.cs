@@ -1,5 +1,6 @@
 ﻿using System;
-using System.Linq;
+using System.Collections.Generic;
+
 using Xunit;
 
 namespace Autofac.Test
@@ -40,6 +41,47 @@ namespace Autofac.Test
             container.Resolve<string>();
 
             Assert.Equal(2, container.ComponentRegistry.Properties["count"]);
+        }
+
+        [Fact]
+        public void WhenComponentIsRegisteredDuringResolveItShouldRaiseTheRegisteredEvent()
+        {
+            var activatedInstances = new List<object>();
+
+            var builder = new ContainerBuilder();
+            builder.RegisterCallback(x =>
+                x.Registered += (sender, args) =>
+                {
+                    args.ComponentRegistration.Activating += (o, eventArgs) => activatedInstances.Add(eventArgs.Instance);
+                });
+
+            builder.RegisterGeneric(typeof(Repository<>)).As(typeof(IRepository<>));
+            builder.RegisterType<Controller>().PropertiesAutowired();
+
+            IContainer container = builder.Build();
+            var controller = container.Resolve<Controller>();
+            controller.UseTheRepository();
+
+            Assert.Contains(activatedInstances, instance => instance is Controller);
+            Assert.Contains(activatedInstances, instance => instance is IRepository<object>);
+        }
+
+        public interface IRepository<T>
+        {
+        }
+
+        public class Repository<T> : IRepository<T>
+        {
+        }
+
+        public class Controller
+        {
+            public Lazy<IRepository<object>> TheRepository { get; set; }
+
+            public void UseTheRepository()
+            {
+                Assert.NotNull(TheRepository.Value);
+            }
         }
     }
 }

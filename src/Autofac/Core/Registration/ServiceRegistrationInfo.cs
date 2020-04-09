@@ -51,30 +51,32 @@ namespace Autofac.Core.Registration
         ///  List of service implementations coming from sources. Sources have priority over preserve-default implementations.
         ///  Implementations from sources are enumerated in preserve-default order, so the most default implementation comes first.
         /// </summary>
-        private List<IComponentRegistration> _sourceImplementations = null;
+        private List<IComponentRegistration>? _sourceImplementations;
 
         /// <summary>
         ///  List of explicit service implementations specified with the PreserveExistingDefaults option.
         ///  Enumerated in preserve-defaults order, so the most default implementation comes first.
         /// </summary>
-        private List<IComponentRegistration> _preserveDefaultImplementations = null;
+        private List<IComponentRegistration>? _preserveDefaultImplementations;
 
         [SuppressMessage("Microsoft.ApiDesignGuidelines", "CA2213", Justification = "The creator of the compponent registration is responsible for disposal.")]
-        private IComponentRegistration _defaultImplementation;
+        private IComponentRegistration? _defaultImplementation;
 
         /// <summary>
         /// Used for bookkeeping so that the same source is not queried twice (may be null).
         /// </summary>
-        private Queue<IRegistrationSource> _sourcesToQuery;
+        private Queue<IRegistrationSource>? _sourcesToQuery;
+
+        /// <summary>
+        /// The combined list of registered implementations. The value will be calculated lazily by <see cref="InitializeComponentRegistrations" />.
+        /// </summary>
+        private Lazy<IList<IComponentRegistration>>? _registeredImplementations;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ServiceRegistrationInfo"/> class.
         /// </summary>
         /// <param name="service">The tracked service.</param>
-        public ServiceRegistrationInfo(Service service)
-        {
-            _service = service;
-        }
+        public ServiceRegistrationInfo(Service service) => _service = service;
 
         /// <summary>
         /// Gets a value indicating whether the first time a service is requested, initialization (e.g. reading from sources)
@@ -95,18 +97,8 @@ namespace Autofac.Core.Registration
             get
             {
                 RequiresInitialization();
-                var resultingCollection = Enumerable.Reverse(_defaultImplementations);
-                if (_sourceImplementations != null)
-                {
-                    resultingCollection = resultingCollection.Concat(_sourceImplementations);
-                }
 
-                if (_preserveDefaultImplementations != null)
-                {
-                    resultingCollection = resultingCollection.Concat(_preserveDefaultImplementations);
-                }
-
-                return resultingCollection;
+                return _registeredImplementations!.Value;
             }
         }
 
@@ -166,16 +158,18 @@ namespace Autofac.Core.Registration
             }
 
             _defaultImplementation = null;
+
+            if (IsInitialized)
+                _registeredImplementations = new Lazy<IList<IComponentRegistration>>(InitializeComponentRegistrations);
         }
 
-        public bool TryGetRegistration(out IComponentRegistration registration)
+        public bool TryGetRegistration([NotNullWhen(returnValue: true)] out IComponentRegistration? registration)
         {
             RequiresInitialization();
 
-            registration = _defaultImplementation ?? (_defaultImplementation =
-                _defaultImplementations.LastOrDefault() ??
-                _sourceImplementations?.First() ??
-                _preserveDefaultImplementations?.First());
+            registration = _defaultImplementation ??= _defaultImplementations.LastOrDefault() ??
+                                                      _sourceImplementations?.First() ??
+                                                      _preserveDefaultImplementations?.First();
 
             return registration != null;
         }
@@ -183,18 +177,24 @@ namespace Autofac.Core.Registration
         public void Include(IRegistrationSource source)
         {
             if (IsInitialized)
+            {
                 BeginInitialization(new[] { source });
+            }
             else if (IsInitializing)
-                _sourcesToQuery.Enqueue(source);
+            {
+                // _sourcesToQuery can only be non-null here due to the initialization flow.
+                _sourcesToQuery!.Enqueue(source);
+            }
         }
 
         public bool IsInitializing => !IsInitialized && _sourcesToQuery != null;
 
-        public bool HasSourcesToQuery => IsInitializing && _sourcesToQuery.Count != 0;
+        public bool HasSourcesToQuery => IsInitializing && _sourcesToQuery!.Count != 0;
 
         public void BeginInitialization(IEnumerable<IRegistrationSource> sources)
         {
             IsInitialized = false;
+            _registeredImplementations = new Lazy<IList<IComponentRegistration>>(InitializeComponentRegistrations);
             _sourcesToQuery = new Queue<IRegistrationSource>(sources);
         }
 
@@ -205,6 +205,7 @@ namespace Autofac.Core.Registration
             _sourcesToQuery = new Queue<IRegistrationSource>(_sourcesToQuery.Where(rs => rs != source));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnforceDuringInitialization()
         {
             if (!IsInitializing)
@@ -215,7 +216,8 @@ namespace Autofac.Core.Registration
         {
             EnforceDuringInitialization();
 
-            return _sourcesToQuery.Dequeue();
+            // _sourcesToQuery always non-null during initialization
+            return _sourcesToQuery!.Dequeue();
         }
 
         public void CompleteInitialization()
@@ -227,24 +229,20 @@ namespace Autofac.Core.Registration
             _sourcesToQuery = null;
         }
 
-        [SuppressMessage("Microsoft.Usage", "CA1801:ReviewUnusedParameters", MessageId = "registration")]
-        public bool ShouldRecalculateAdaptersOn(IComponentRegistration registration)
+        private IList<IComponentRegistration> InitializeComponentRegistrations()
         {
-            // The best optimisation we could make here is to track which services
-            // have been queried by and adapter - i.e. instead of giving the
-            // adapter the ComponentRegistry.RegistrationsFor method, add some
-            // logic that performs the query then marks the service info as
-            // an adapted on. Then only when registration supports services that
-            // have been adapted do we need to do any querying at all.
-            //
-            // Once the optimization is in place, REMOVE THE SUPPRESSMESSAGE ATTRIBUTE
-            // as, ostensibly, the actual registration will be used at that time.
+            var resultingCollection = Enumerable.Reverse(_defaultImplementations);
+            if (_sourceImplementations != null)
+            {
+                resultingCollection = resultingCollection.Concat(_sourceImplementations);
+            }
 
-            // IMPROVEMENT - We only need to check service registration infos that:
-            // - Have already been initialized
-            // - Were created via a registration source (because we might be adding an equivalent explicit registration such as Func<T>)
-            // - Don't contain any registrations (because a registration source was added when no adaptee was present)
-            return IsInitialized && (_sourceImplementations != null || !Any);
+            if (_preserveDefaultImplementations != null)
+            {
+                resultingCollection = resultingCollection.Concat(_preserveDefaultImplementations);
+            }
+
+            return resultingCollection.ToList();
         }
     }
 }

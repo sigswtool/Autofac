@@ -40,15 +40,22 @@ namespace Autofac.Core
         /// <summary>
         /// Gets the parent of this node of the hierarchy, or null.
         /// </summary>
-        ISharingLifetimeScope ParentLifetimeScope { get; }
+        ISharingLifetimeScope? ParentLifetimeScope { get; }
 
         /// <summary>
-        /// Try to retrieve an instance based on a GUID key. If the instance
-        /// does not exist, invoke <paramref name="creator"/> to create it.
+        /// Try to retrieve a shared instance based on a GUID key.
         /// </summary>
         /// <param name="id">Key to look up.</param>
-        /// <param name="creator">Creation function.</param>
-        /// <returns>An instance.</returns>
-        object GetOrCreateAndShare(Guid id, Func<object> creator);
+        /// <param name="value">The instance that has the specified key.</param>
+        /// <returns><c>true</c> if the key was found; otherwise, <c>false</c>.</returns>
+        bool TryGetSharedInstance(Guid id, out object value);
+
+        /// <summary>
+        /// Creates a shared instance with a GUID key.
+        /// </summary>
+        /// <param name="id">Key.</param>
+        /// <param name="creator">A function that will create the instance when called.</param>
+        /// <returns>The shared instance.</returns>
+        object CreateSharedInstance(Guid id, Func<object> creator);
     }
 }
