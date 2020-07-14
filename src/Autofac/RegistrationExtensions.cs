@@ -99,14 +99,16 @@ namespace Autofac
 
                 activator.DisposeInstance = rb.RegistrationData.Ownership == InstanceOwnership.OwnedByLifetimeScope;
 
-                if (rb.RegistrationData.ActivatedHandlers.Any() || rb.RegistrationData.ActivatingHandlers.Any())
+                if (rb.RegistrationData.ActivatedHandlers.Count > 0 || rb.RegistrationData.ActivatingHandlers.Count > 0)
                 {
+                    var autoStartService = rb.RegistrationData.Services.First();
+
                     // https://github.com/autofac/Autofac/issues/1102
                     // Single instance registrations with activation handlers need to be auto-activated,
                     // so that other behaviour (such as OnRelease) that expects 'normal' object lifetime behaviour works as expected.
                     var activationRegistration = new RegistrationBuilder<T, SimpleActivatorData, SingleRegistrationStyle>(
                         new AutoActivateService(),
-                        new SimpleActivatorData(new DelegateActivator(typeof(T), (c, p) => c.Resolve<T>())),
+                        new SimpleActivatorData(new DelegateActivator(typeof(T), (c, p) => c.ResolveService(autoStartService))),
                         new SingleRegistrationStyle());
 
                     RegistrationBuilder.RegisterSingleComponent(cr, activationRegistration);
@@ -878,6 +880,35 @@ namespace Autofac
             where TReflectionActivatorData : ReflectionActivatorData
         {
             return registration.WithProperty(new NamedPropertyParameter(propertyName, propertyValue));
+        }
+
+        /// <summary>
+        /// Configure an explicit value for a property.
+        /// </summary>
+        /// <typeparam name="TLimit">Registration limit type.</typeparam>
+        /// <typeparam name="TReflectionActivatorData">Activator data type.</typeparam>
+        /// <typeparam name="TStyle">Registration style.</typeparam>
+        /// <typeparam name="TProperty">Type of the property being assigned.</typeparam>
+        /// <param name="registration">Registration to set property on.</param>
+        /// <param name="propertyExpression">Expression of a property on the target type.</param>
+        /// <param name="propertyValue">Value to supply to the property.</param>
+        /// <returns>A registration builder allowing further configuration of the component.</returns>
+        public static IRegistrationBuilder<TLimit, TReflectionActivatorData, TStyle>
+            WithProperty<TLimit, TReflectionActivatorData, TStyle, TProperty>(
+                this IRegistrationBuilder<TLimit, TReflectionActivatorData, TStyle> registration,
+                Expression<Func<TLimit, TProperty>> propertyExpression,
+                TProperty propertyValue)
+            where TReflectionActivatorData : ReflectionActivatorData
+        {
+            if (registration == null) throw new ArgumentNullException(nameof(registration));
+            if (propertyExpression == null) throw new ArgumentNullException(nameof(propertyExpression));
+            if (propertyValue == null) throw new ArgumentNullException(nameof(propertyValue));
+
+            var propertyInfo = (propertyExpression.Body as MemberExpression)?.Member as PropertyInfo;
+            if (propertyInfo == null)
+                throw new ArgumentOutOfRangeException(nameof(propertyExpression), RegistrationExtensionsResources.ExpressionDoesNotReferToProperty);
+
+            return registration.WithProperty(new NamedPropertyParameter(propertyInfo.Name, propertyValue));
         }
 
         /// <summary>
